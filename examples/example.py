@@ -2,9 +2,9 @@ import asyncio
 from typing import AsyncIterator
 
 
-from fastGRPC.context import GRPCContext
-from fastGRPC import FastGRPC
-from fastGRPC.schemas import BaseGRPCSchema
+from fastgrpcio.context import GRPCContext
+from fastgrpcio import FastGRPC
+from fastgrpcio.schemas import BaseGRPCSchema
 
 class ResponseSchema(BaseGRPCSchema):
     response: str | None

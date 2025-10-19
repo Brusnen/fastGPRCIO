@@ -14,11 +14,11 @@ FastGRPC compiles Python async callables into a generic gRPC service at runtime,
 ## Quickstart
 1. Install dependencies (example using uv and pip):
    ```bash
-   pip install fastgrpc
+   pip install fastgrpcio
    ```
    
    ```bash
-   uv add fastgrpc
+   uv add fastgrpcio
    ```
 
 2. Define schemas and a context for your RPCs (see `fastGRPC/schemas.py` and `fastGRPC/context.py`).
@@ -35,7 +35,7 @@ FastGRPC compiles Python async callables into a generic gRPC service at runtime,
    - Define the app
 
      ```python
-     from fastGRPC.fast_grpc import FastGRPC
+     from fastgrpcio.fast_grpc import FastGRPC
      app = FastGRPC(app_name="HelloApp", app_package_name="test_app")
      ```
 
