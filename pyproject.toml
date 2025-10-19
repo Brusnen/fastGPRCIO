@@ -1,0 +1,15 @@
+[project]
+name = "fastgrpcio"
+version = "0.1.0"
+authors = [{ name = "Sergey Brusnov", email = "sergey.brusnov1900@gmail.com" }]
+description = "Rapid fast development of gRPC services with Pydantic models"
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fast-depends>=2.4.12",
+    "grpcio>=1.75.1",
+    "grpcio-reflection>=1.75.1",
+    "grpcio-tools>=1.75.1",
+    "pydantic>=2.12.0",
+]

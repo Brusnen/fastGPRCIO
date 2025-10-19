@@ -1,0 +1,4 @@
+
+
+class FastGRPCCompilationError(Exception):
+    pass
