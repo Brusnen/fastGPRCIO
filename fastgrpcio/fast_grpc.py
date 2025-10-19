@@ -1,31 +1,24 @@
+import logging
+from collections.abc import Callable
 from concurrent import futures
-from typing import Dict, Callable, Any
+from typing import Any
 
 import grpc
 from grpc_reflection.v1alpha import reflection
 
 from .grpc_compiler import GRPCCompiler
-import logging
 
-logging.basicConfig(
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-    level=logging.INFO
-)
+logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-
 class FastGRPC:
-
-    def __init__(self, app_name: str = "FastGRPCApp",
-                 app_package_name: str = "fast_grpc_app",
-                 port: int = 50051):
+    def __init__(self, app_name: str = "FastGRPCApp", app_package_name: str = "fast_grpc_app", port: int = 50051):
         self.app_name = app_name
         self.app_package_name = app_package_name
         self.port = port
 
-    _functions: Dict[str, Callable[..., Any]] = {}
+    _functions: dict[str, Callable[..., Any]] = {}
 
     @classmethod
     def register_as(cls, name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -40,8 +33,7 @@ class FastGRPC:
 
         return decorator
 
-
-    def _compile(self, funcs: Dict[str, Callable]):
+    def _compile(self, funcs: dict[str, Callable]):
         compiler = GRPCCompiler(
             app_name=self.app_name,
             app_package_name=self.app_package_name,
@@ -52,20 +44,18 @@ class FastGRPC:
     async def serve(self) -> Any:
         logger.info("Starting gRPC server...")
         server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=10))
-        SERVICE_NAMES = [
+        service_names = [
             reflection.SERVICE_NAME,
         ]
         try:
             handlers, service, compiler = self._compile(self._functions)
             generic_handler = grpc.method_handlers_generic_handler(service, handlers)
-            SERVICE_NAMES.append(service)
+            service_names.append(service)
         except Exception:
             raise
         server.add_generic_rpc_handlers((generic_handler,))
-        server.add_insecure_port(f'[::]:{self.port}')
-        reflection.enable_server_reflection(SERVICE_NAMES, server)
+        server.add_insecure_port(f"[::]:{self.port}")
+        reflection.enable_server_reflection(service_names, server)
         await server.start()
         logger.info(f"Server started at [::]:{self.port}")
         await server.wait_for_termination()
-
-

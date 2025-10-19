@@ -1,28 +1,25 @@
 import asyncio
-from typing import Dict, Callable, Type, Tuple, Any, get_origin, AsyncIterator, get_args
-from typing import get_type_hints
+import logging
+from typing import Any, AsyncIterator, Callable, get_args, get_origin, get_type_hints
 
+import fast_depends
 import grpc
 from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
 from google.protobuf.json_format import MessageToDict
+from google.protobuf.message import Message
 from google.protobuf.message_factory import GetMessageClass
-import logging
-import fast_depends
 from grpc._cython.cygrpc import _ServicerContext
+from pydantic import ValidationError
 
+from ._utils import pydantic_error_to_grpc
 from .context import GRPCContext
 from .schemas import BaseGRPCSchema
 
-
-logging.basicConfig(
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-    level=logging.INFO
-)
+logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-PYTHON_TO_PROTO_TYPE: dict[Type[Any], int] = {
+PYTHON_TO_PROTO_TYPE: dict[type[Any], int] = {
     int: descriptor_pb2.FieldDescriptorProto.TYPE_INT64,
     float: descriptor_pb2.FieldDescriptorProto.TYPE_DOUBLE,
     bool: descriptor_pb2.FieldDescriptorProto.TYPE_BOOL,
@@ -38,7 +35,6 @@ PYTHON_TO_LABEL_TYPE: dict[str, int] = {
 
 
 class GRPCCompiler:
-
     def __init__(self, app_name: str, app_package_name: str):
         self.file_proto.name = f"{app_package_name}.proto"
         self.service_name = app_name
@@ -52,11 +48,11 @@ class GRPCCompiler:
 
     def _extract_pydantic_models(
         self, func: Callable[..., Any]
-    ) -> Tuple[Type[BaseGRPCSchema], Type[BaseGRPCSchema], bool, bool]:
-        hints: Dict[str, Any] = get_type_hints(func)
+    ) -> tuple[type[BaseGRPCSchema], type[BaseGRPCSchema], bool, bool]:
+        hints: dict[str, Any] = get_type_hints(func)
 
-        request_model: Type[BaseGRPCSchema] | None = None
-        response_model: Type[BaseGRPCSchema] | None = None
+        request_model: type[BaseGRPCSchema] | None = None
+        response_model: type[BaseGRPCSchema] | None = None
 
         client_stream = False
         server_stream = False
@@ -87,67 +83,58 @@ class GRPCCompiler:
                 continue
 
         if not request_model or not response_model:
-            raise ValueError(
-                f"Function {func.__name__} must have both request and response Pydantic models"
-            )
+            raise ValueError(f"Function {func.__name__} must have both request and response Pydantic models")
 
         return request_model, response_model, client_stream, server_stream
 
-    def _create_message(self, request_model: Type[BaseGRPCSchema]):
-        if request_model.__name__ in self.generated_messages:
+    def _create_message(self, model: type[BaseGRPCSchema]) -> None:
+        if model.__name__ in self.generated_messages:
             return
-        message_request = self.file_proto.message_type.add()
-        message_request.name = request_model.__name__
-        self.generated_messages.add(request_model.__name__)
+
+        message_proto = self.file_proto.message_type.add()
+        message_proto.name = model.__name__
+        self.generated_messages.add(model.__name__)
 
         field_number = 1
-        for field_name, field_type, optional, is_repeated in request_model.iterate_by_model_fields():
-            grpc_field = message_request.field.add()
+        for field_name, field_type, is_repeated in model.iterate_by_model_fields():
+            grpc_field = message_proto.field.add()
             grpc_field.name = field_name
             grpc_field.number = field_number
             field_number += 1
 
-            if optional:
-                label = PYTHON_TO_LABEL_TYPE["optional"]
-            elif is_repeated:
-                label = PYTHON_TO_LABEL_TYPE["repeated"]
+            if is_repeated:
+                grpc_field.label = PYTHON_TO_LABEL_TYPE["repeated"]
             else:
-                label = PYTHON_TO_LABEL_TYPE["default"]
-            grpc_field.label = label
+                grpc_field.label = PYTHON_TO_LABEL_TYPE["optional"]
 
             try:
                 grpc_field.type = PYTHON_TO_PROTO_TYPE[field_type]
-            except KeyError:
+            except KeyError as err:
                 if isinstance(field_type, type) and issubclass(field_type, BaseGRPCSchema):
-                    nested_message = self.file_proto.message_type.add()
-                    nested_message.name = field_type.__name__
-
-                    nested_field_number = 1
-                    for sub_field_name, sub_field_type, sub_optional, sub_repeated in field_type.iterate_by_model_fields():
-                        sub_field = nested_message.field.add()
-                        sub_field.name = sub_field_name
-                        sub_field.number = nested_field_number
-                        nested_field_number += 1
-
-                        if sub_optional:
-                            sub_label = PYTHON_TO_LABEL_TYPE["optional"]
-                        elif is_repeated is list:
-                            sub_label = PYTHON_TO_LABEL_TYPE["repeated"]
-                        else:
-                            sub_label = PYTHON_TO_LABEL_TYPE["default"]
-                        sub_field.label = sub_label
-
-                        try:
-                            sub_field.type = PYTHON_TO_PROTO_TYPE[sub_field_type]
-                        except KeyError:
-                            raise Exception(
-                                f"Unknown nested field type: {sub_field_name} ({sub_field_type})"
-                            )
+                    self._create_message(field_type)
 
                     grpc_field.type = descriptor_pb2.FieldDescriptorProto.TYPE_MESSAGE
                     grpc_field.type_name = f".{self.file_proto.package}.{field_type.__name__}"
                 else:
-                    raise Exception("Unknown field type:", field_name, field_type)
+                    origin = get_origin(field_type)
+                    args = get_args(field_type)
+
+                    if origin is list and args:
+                        inner_type = args[0]
+                        if isinstance(inner_type, type) and issubclass(inner_type, BaseGRPCSchema):
+                            self._create_message(inner_type)
+                            grpc_field.type = descriptor_pb2.FieldDescriptorProto.TYPE_MESSAGE
+                            grpc_field.type_name = f".{self.file_proto.package}.{inner_type.__name__}"
+                            grpc_field.label = PYTHON_TO_LABEL_TYPE["repeated"]
+                            continue
+                        elif inner_type in PYTHON_TO_PROTO_TYPE:
+                            grpc_field.type = PYTHON_TO_PROTO_TYPE[inner_type]
+                            grpc_field.label = PYTHON_TO_LABEL_TYPE["repeated"]
+                            continue
+
+                    raise TypeError(
+                        f"Unknown or unsupported field type: {field_name} ({field_type}) in model {model.__name__}"
+                    ) from err
 
     def _create_service(self):
         service = self.file_proto.service.add()
@@ -159,8 +146,8 @@ class GRPCCompiler:
         self,
         service,
         func_name: str,
-        request_model: Type[BaseGRPCSchema],
-        response_model: Type[BaseGRPCSchema],
+        request_model: type[BaseGRPCSchema],
+        response_model: type[BaseGRPCSchema],
         client_stream: bool,
         server_stream: bool,
     ):
@@ -182,19 +169,27 @@ class GRPCCompiler:
         client_stream: bool = False,
         server_stream: bool = False,
     ) -> Callable[..., Any]:
-
         if not client_stream and not server_stream:
-            async def handler(request_proto: Any, context: _ServicerContext) -> Any:
+
+            async def handler(request_proto: Message, context: _ServicerContext) -> Any:
                 logger.info("[Unary] %s - Received request", user_func.__name__)
 
                 request_dict: dict[str, Any] = MessageToDict(request_proto)
-                pydantic_request = request_model.model_validate(request_dict)
+                try:
+                    pydantic_request = request_model.model_validate(request_dict)
+                except ValidationError as e:
+                    grpc_status_obj = pydantic_error_to_grpc(e)
+                    await context.abort_with_status(grpc_status_obj)
+                    return
+
                 injected = fast_depends.inject(user_func)
 
                 grpc_context = GRPCContext(context)
-                result = await injected(pydantic_request, context=grpc_context) \
-                    if asyncio.iscoroutinefunction(injected) \
+                result = (
+                    await injected(pydantic_request, context=grpc_context)
+                    if asyncio.iscoroutinefunction(injected)
                     else injected(pydantic_request, context=grpc_context)
+                )
 
                 if isinstance(result, response_class):
                     return result
@@ -205,11 +200,19 @@ class GRPCCompiler:
             return handler
 
         if not client_stream and server_stream:
-            async def handler(request_proto: Any, context: _ServicerContext) -> AsyncIterator[Any]:
+
+            async def handler(request_proto: Message, context: _ServicerContext) -> AsyncIterator[Any]:
                 logger.info("[Server streaming] %s - Received request", user_func.__name__)
 
                 request_dict: dict[str, Any] = MessageToDict(request_proto)
-                pydantic_request = request_model.model_validate(request_dict)
+
+                try:
+                    pydantic_request = request_model.model_validate(request_dict)
+                except ValidationError as e:
+                    grpc_status_obj = pydantic_error_to_grpc(e)
+                    await context.abort_with_status(grpc_status_obj)
+                    return
+
                 injected = fast_depends.inject(user_func)
                 grpc_context = GRPCContext(context)
                 result = injected(pydantic_request, context=grpc_context)
@@ -223,34 +226,52 @@ class GRPCCompiler:
             return handler
 
         if client_stream and not server_stream:
-            async def handler(request_iterator: AsyncIterator[Any], context: _ServicerContext) -> Any:
+
+            async def handler(request_iterator: AsyncIterator[Message], context: _ServicerContext) -> Any:
                 logger.info("[Client streaming] %s - Received request", user_func.__name__)
 
                 async def pydantic_request_gen() -> AsyncIterator[Any]:
                     async for msg in request_iterator:
                         msg_dict: dict[str, Any] = MessageToDict(msg)
-                        yield request_model.model_validate(msg_dict)
+                        try:
+                            yield request_model.model_validate(msg_dict)
+                        except ValidationError as e:
+                            grpc_status_obj = pydantic_error_to_grpc(e)
+                            await context.abort_with_status(grpc_status_obj)
+                            return
+
                 injected = fast_depends.inject(user_func)
                 grpc_context = GRPCContext(context)
-                result = await injected(pydantic_request_gen(), context=grpc_context) \
-                    if asyncio.iscoroutinefunction(user_func) \
+                result = (
+                    await injected(pydantic_request_gen(), context=grpc_context)
+                    if asyncio.iscoroutinefunction(user_func)
                     else injected(pydantic_request_gen(), context=grpc_context)
+                )
 
                 if isinstance(result, response_class):
                     return result
-                logger.info(f"[Client streaming] %s - Processed response", user_func.__name__)
+                logger.info("[Client streaming] %s - Processed response", user_func.__name__)
                 return response_class(**result.model_dump())
 
             return handler
 
         if client_stream and server_stream:
-            async def handler(request_iterator: AsyncIterator[Any], context: _ServicerContext) -> AsyncIterator[Any]:
-                logger.info(f"[Bidi streaming] %s - Received request", user_func.__name__)
+
+            async def handler(
+                request_iterator: AsyncIterator[Message], context: _ServicerContext
+            ) -> AsyncIterator[Any]:
+                logger.info("[Bidi streaming] %s - Received request", user_func.__name__)
 
                 async def pydantic_request_gen() -> AsyncIterator[Any]:
                     async for msg in request_iterator:
                         msg_dict: dict[str, Any] = MessageToDict(msg)
-                        yield request_model.model_validate(msg_dict)
+                        try:
+                            yield request_model.model_validate(msg_dict)
+                        except ValidationError as e:
+                            grpc_status_obj = pydantic_error_to_grpc(e)
+                            await context.abort_with_status(grpc_status_obj)
+                            return
+
                 injected = fast_depends.inject(user_func)
                 grpc_context = GRPCContext(context)
 
@@ -260,13 +281,13 @@ class GRPCCompiler:
 
                 async for resp in result:
                     yield response_class(**resp.model_dump())
-                logger.info(f"[Bidi streaming] %s - Processed response", user_func.__name__)
+                logger.info("[Bidi streaming] %s - Processed response", user_func.__name__)
 
             return handler
 
         raise ValueError(f"Failed to determine RPC type for {user_func.__name__}")
 
-    def compile(self, funcs: Dict[str, Callable]):
+    def compile(self, funcs: dict[str, Callable]):
         service = self._create_service()
 
         for func_name, func in funcs.items():
@@ -314,7 +335,7 @@ class GRPCCompiler:
                     request_deserializer=request_class.FromString,
                     response_serializer=response_class.SerializeToString,
                 )
-                logger.info("Registered gRPC method: %s",func_name)
+                logger.info("Registered gRPC method: %s", func_name)
 
             self.method_handlers[func_name] = grpc_handler
 
