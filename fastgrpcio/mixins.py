@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 class CreateHandlersMixins:
     _middlewares: list[BaseMiddleware]
+    app_name: str
+    app_package_name: str
 
     def _apply_middlewares(
         self,
@@ -28,6 +30,7 @@ class CreateHandlersMixins:
         request_model: type[BaseGRPCSchema],
         response_class: type[BaseGRPCSchema],
         unary_type: Literal["Unary", "ServerStreaming", "ClientStreaming", "BidiStreaming"],
+        func_name: str,
     ) -> Any:
         if unary_type in ("Unary"):
 
@@ -53,6 +56,9 @@ class CreateHandlersMixins:
                             response_class=response_class,
                             handler=handler,
                             unary_type=unary_type,
+                            app_name=self.app_name,
+                            app_package_name=self.app_package_name,
+                            func_name=func_name,
                         )
 
                     call_next = wrapper
@@ -86,6 +92,9 @@ class CreateHandlersMixins:
                             response_class=response_class,
                             handler=handler,
                             unary_type=unary_type,
+                            app_name=self.app_name,
+                            app_package_name=self.app_package_name,
+                            func_name=func_name,
                         ):
                             yield resp
 
@@ -120,6 +129,9 @@ class CreateHandlersMixins:
                             response_class=response_class,
                             handler=handler,
                             unary_type=unary_type,
+                            app_name=self.app_name,
+                            app_package_name=self.app_package_name,
+                            func_name=func_name,
                         )
 
                     call_next = wrapper
@@ -133,6 +145,7 @@ class CreateHandlersMixins:
         user_func: Callable[..., Any],
         request_model: type[BaseGRPCSchema],
         response_class: type[BaseGRPCSchema],
+        func_name: str,
     ) -> Callable[..., Any]:
         async def handler(request_proto: Message, context: _ServicerContext) -> Any:
             request_dict: dict[str, Any] = MessageToDict(request_proto)
@@ -157,7 +170,7 @@ class CreateHandlersMixins:
 
             return response_class(**result.model_dump())
 
-        handler = self._apply_middlewares(handler, user_func, request_model, response_class, unary_type="Unary")
+        handler = self._apply_middlewares(handler, user_func, request_model, response_class, unary_type="Unary", func_name=func_name)
         return handler
 
     def _make_server_stream_handler(
@@ -165,6 +178,7 @@ class CreateHandlersMixins:
         user_func: Callable[..., Any],
         request_model: type[BaseGRPCSchema],
         response_class: type[BaseGRPCSchema],
+        func_name: str,
     ) -> Callable[..., Any]:
         async def handler(request_proto: Message, context: _ServicerContext) -> AsyncIterator[Any]:
             request_dict: dict[str, Any] = MessageToDict(request_proto)
@@ -185,7 +199,7 @@ class CreateHandlersMixins:
                 yield response_class(**item.model_dump())
 
         handler = self._apply_middlewares(
-            handler, user_func, request_model, response_class, unary_type="ServerStreaming"
+            handler, user_func, request_model, response_class, unary_type="ServerStreaming", func_name=func_name
         )
         return handler
 
@@ -194,6 +208,7 @@ class CreateHandlersMixins:
         user_func: Callable[..., Any],
         request_model: type[BaseGRPCSchema],
         response_class: type[BaseGRPCSchema],
+        func_name: str,
     ) -> Callable[..., Any]:
         async def handler(request_iterator: AsyncIterator[Message], context: _ServicerContext) -> Any:
             async def pydantic_request_gen() -> AsyncIterator[Any]:
@@ -219,7 +234,7 @@ class CreateHandlersMixins:
             return response_class(**result.model_dump())
 
         handler = self._apply_middlewares(
-            handler, user_func, request_model, response_class, unary_type="ClientStreaming"
+            handler, user_func, request_model, response_class, unary_type="ClientStreaming", func_name=func_name
         )
         return handler
 
@@ -228,6 +243,7 @@ class CreateHandlersMixins:
         user_func: Callable[..., Any],
         request_model: type[BaseGRPCSchema],
         response_class: type[BaseGRPCSchema],
+        func_name: str,
     ) -> Callable[..., Any]:
         async def handler(request_iterator: AsyncIterator[Message], context: _ServicerContext) -> AsyncIterator[Any]:
             async def pydantic_request_gen() -> AsyncIterator[Any]:
@@ -250,5 +266,5 @@ class CreateHandlersMixins:
             async for resp in result:
                 yield response_class(**resp.model_dump())
 
-        handler = self._apply_middlewares(handler, user_func, request_model, response_class, unary_type="BidiStreaming")
+        handler = self._apply_middlewares(handler, user_func, request_model, response_class, unary_type="BidiStreaming", func_name=func_name)
         return handler

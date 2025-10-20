@@ -19,3 +19,12 @@ class Context:
 
 
 GRPCContext = Annotated[Context, SkipValidation()]
+
+
+class ContextWrapper:
+    def __init__(self, context: grpc.aio.ServicerContext, trace_ctx) -> None:
+        self._context = context
+        self.trace_ctx = trace_ctx
+
+    def __getattr__(self, name: str):
+        return self._context
