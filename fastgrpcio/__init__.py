@@ -1,3 +1,3 @@
-from .fast_grpc import FastGRPC
+from .fast_grpc import FastGRPC, FastGRPCRouter
 
-__all__ = ["FastGRPC"]
+__all__ = ["FastGRPC", "FastGRPCRouter"]

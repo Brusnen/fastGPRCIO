@@ -1,18 +1,13 @@
-import asyncio
 import logging
 from typing import Any, AsyncIterator, Callable, get_args, get_origin, get_type_hints
 
-import fast_depends
 import grpc
 from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
-from google.protobuf.json_format import MessageToDict
-from google.protobuf.message import Message
+from google.protobuf.descriptor_pb2 import ServiceDescriptorProto
 from google.protobuf.message_factory import GetMessageClass
-from grpc._cython.cygrpc import _ServicerContext
-from pydantic import ValidationError
 
-from ._utils import pydantic_error_to_grpc
-from .context import GRPCContext
+from .middlewares import BaseMiddleware
+from .mixins import CreateHandlersMixins
 from .schemas import BaseGRPCSchema
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S", level=logging.INFO)
@@ -34,17 +29,23 @@ PYTHON_TO_LABEL_TYPE: dict[str, int] = {
 }
 
 
-class GRPCCompiler:
-    def __init__(self, app_name: str, app_package_name: str):
+class GRPCCompiler(CreateHandlersMixins):
+    def __init__(
+        self,
+        app_name: str,
+        app_package_name: str,
+        middlewares: list[BaseMiddleware],
+    ):
+        self.file_proto = descriptor_pb2.FileDescriptorProto()
         self.file_proto.name = f"{app_package_name}.proto"
         self.service_name = app_name
         self.file_proto.package = app_package_name
+        self._middlewares = middlewares
 
-    file_proto = descriptor_pb2.FileDescriptorProto()
-    pool = descriptor_pool.Default()
-    factory = message_factory.MessageFactory(pool)
-    method_handlers = {}
-    generated_messages: set[str] = set()
+        self.pool = descriptor_pool.Default()
+        self.factory = message_factory.MessageFactory(self.pool)
+        self.method_handlers: dict[str, Callable[..., Any]] = {}
+        self.generated_messages: set[str] = set()
 
     def _extract_pydantic_models(
         self, func: Callable[..., Any]
@@ -136,21 +137,20 @@ class GRPCCompiler:
                         f"Unknown or unsupported field type: {field_name} ({field_type}) in model {model.__name__}"
                     ) from err
 
-    def _create_service(self):
+    def _create_service(self) -> ServiceDescriptorProto:
         service = self.file_proto.service.add()
         service.name = self.service_name
-
         return service
 
     def _add_rpc(
         self,
-        service,
+        service: ServiceDescriptorProto,
         func_name: str,
         request_model: type[BaseGRPCSchema],
         response_model: type[BaseGRPCSchema],
         client_stream: bool,
         server_stream: bool,
-    ):
+    ) -> tuple[str, str]:
         rpc = service.method.add()
         rpc.name = func_name
         rpc.input_type = f"{self.file_proto.package}.{request_model.__name__}"
@@ -163,131 +163,24 @@ class GRPCCompiler:
 
     def _make_handler(
         self,
-        user_func: Callable,
+        user_func: Callable[..., Any],
         request_model: type[BaseGRPCSchema],
         response_class: type[BaseGRPCSchema],
         client_stream: bool = False,
         server_stream: bool = False,
     ) -> Callable[..., Any]:
         if not client_stream and not server_stream:
-
-            async def handler(request_proto: Message, context: _ServicerContext) -> Any:
-                logger.info("[Unary] %s - Received request", user_func.__name__)
-
-                request_dict: dict[str, Any] = MessageToDict(request_proto)
-                try:
-                    pydantic_request = request_model.model_validate(request_dict)
-                except ValidationError as e:
-                    grpc_status_obj = pydantic_error_to_grpc(e)
-                    await context.abort_with_status(grpc_status_obj)
-                    return
-
-                injected = fast_depends.inject(user_func)
-
-                grpc_context = GRPCContext(context)
-                result = (
-                    await injected(pydantic_request, context=grpc_context)
-                    if asyncio.iscoroutinefunction(injected)
-                    else injected(pydantic_request, context=grpc_context)
-                )
-
-                if isinstance(result, response_class):
-                    return result
-
-                logger.info("[Unary] %s - Processed response", user_func.__name__)
-                return response_class(**result.model_dump())
-
-            return handler
-
+            return self._make_unary_handler(user_func, request_model, response_class)
         if not client_stream and server_stream:
-
-            async def handler(request_proto: Message, context: _ServicerContext) -> AsyncIterator[Any]:
-                logger.info("[Server streaming] %s - Received request", user_func.__name__)
-
-                request_dict: dict[str, Any] = MessageToDict(request_proto)
-
-                try:
-                    pydantic_request = request_model.model_validate(request_dict)
-                except ValidationError as e:
-                    grpc_status_obj = pydantic_error_to_grpc(e)
-                    await context.abort_with_status(grpc_status_obj)
-                    return
-
-                injected = fast_depends.inject(user_func)
-                grpc_context = GRPCContext(context)
-                result = injected(pydantic_request, context=grpc_context)
-                if asyncio.iscoroutine(result):
-                    result = await result
-
-                async for item in result:
-                    yield response_class(**item.model_dump())
-                logger.info("[Server streaming] %s - Processed response", user_func.__name__)
-
-            return handler
-
+            return self._make_server_stream_handler(user_func, request_model, response_class)
         if client_stream and not server_stream:
-
-            async def handler(request_iterator: AsyncIterator[Message], context: _ServicerContext) -> Any:
-                logger.info("[Client streaming] %s - Received request", user_func.__name__)
-
-                async def pydantic_request_gen() -> AsyncIterator[Any]:
-                    async for msg in request_iterator:
-                        msg_dict: dict[str, Any] = MessageToDict(msg)
-                        try:
-                            yield request_model.model_validate(msg_dict)
-                        except ValidationError as e:
-                            grpc_status_obj = pydantic_error_to_grpc(e)
-                            await context.abort_with_status(grpc_status_obj)
-                            return
-
-                injected = fast_depends.inject(user_func)
-                grpc_context = GRPCContext(context)
-                result = (
-                    await injected(pydantic_request_gen(), context=grpc_context)
-                    if asyncio.iscoroutinefunction(user_func)
-                    else injected(pydantic_request_gen(), context=grpc_context)
-                )
-
-                if isinstance(result, response_class):
-                    return result
-                logger.info("[Client streaming] %s - Processed response", user_func.__name__)
-                return response_class(**result.model_dump())
-
-            return handler
-
+            return self._make_client_stream_handler(user_func, request_model, response_class)
         if client_stream and server_stream:
-
-            async def handler(
-                request_iterator: AsyncIterator[Message], context: _ServicerContext
-            ) -> AsyncIterator[Any]:
-                logger.info("[Bidi streaming] %s - Received request", user_func.__name__)
-
-                async def pydantic_request_gen() -> AsyncIterator[Any]:
-                    async for msg in request_iterator:
-                        msg_dict: dict[str, Any] = MessageToDict(msg)
-                        try:
-                            yield request_model.model_validate(msg_dict)
-                        except ValidationError as e:
-                            grpc_status_obj = pydantic_error_to_grpc(e)
-                            await context.abort_with_status(grpc_status_obj)
-                            return
-
-                injected = fast_depends.inject(user_func)
-                grpc_context = GRPCContext(context)
-
-                result = injected(pydantic_request_gen(), context=grpc_context)
-                if asyncio.iscoroutine(result):
-                    result = await result
-
-                async for resp in result:
-                    yield response_class(**resp.model_dump())
-                logger.info("[Bidi streaming] %s - Processed response", user_func.__name__)
-
-            return handler
+            return self._make_bidi_stream_handler(user_func, request_model, response_class)
 
         raise ValueError(f"Failed to determine RPC type for {user_func.__name__}")
 
-    def compile(self, funcs: dict[str, Callable]):
+    def compile(self, funcs: dict[str, Callable[..., Any]]) -> tuple[dict[str, Callable[..., Any]], str]:
         service = self._create_service()
 
         for func_name, func in funcs.items():

@@ -18,6 +18,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "mypy>=1.18.2",
+    "pytest>=8.4.2",
     "ruff>=0.14.1",
 ]
 
@@ -63,3 +64,9 @@ check_untyped_defs = true
 ignore_missing_imports = true
 pretty = true
 show_error_codes = true
+
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
+explicit = true

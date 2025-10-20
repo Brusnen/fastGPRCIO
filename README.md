@@ -1,3 +1,5 @@
+![PyPI - Downloads](https://img.shields.io/pypi/dm/fastgrpcio)
+
 # FastGRPC
 
 Lightweight framework for building gRPC services with a FastAPI-like developer experience.
