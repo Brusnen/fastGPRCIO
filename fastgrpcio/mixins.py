@@ -10,7 +10,7 @@ from grpc._cython.cygrpc import _ServicerContext
 from pydantic import ValidationError
 
 from fastgrpcio._utils import pydantic_error_to_grpc
-from fastgrpcio.context import GRPCContext
+from fastgrpcio.context import GRPCContext, ContextWrapper
 from fastgrpcio.middlewares import BaseMiddleware
 from fastgrpcio.schemas import BaseGRPCSchema
 
@@ -34,7 +34,8 @@ class CreateHandlersMixins:
     ) -> Any:
         if unary_type in ("Unary"):
 
-            async def _apply_unary(request: Any, context: grpc.aio.ServicerContext) -> Any:
+            async def _apply_unary(request: Any, context: _ServicerContext) -> Any:
+                context = ContextWrapper(context)
                 async def call_next(req: Any, ctx: grpc.aio.ServicerContext) -> Any:
                     return await handler(req, ctx)
 
@@ -69,8 +70,9 @@ class CreateHandlersMixins:
 
         elif unary_type in ("ServerStreaming", "BidiStreaming"):
 
-            async def _apply_server_stream(request: Any, context: grpc.aio.ServicerContext) -> AsyncIterator[Any]:
-                async def call_next(req: Any, ctx: grpc.aio.ServicerContext) -> AsyncIterator[Any]:
+            async def _apply_server_stream(request: Any, context: _ServicerContext) -> AsyncIterator[Any]:
+                context = ContextWrapper(context)
+                async def call_next(req: Any, ctx: _ServicerContext) -> AsyncIterator[Any]:
                     async for resp in handler(req, ctx):
                         yield resp
 
@@ -107,7 +109,8 @@ class CreateHandlersMixins:
 
         elif unary_type in ("ClientStreaming"):
 
-            async def _apply_client_stream(request: AsyncIterator[Any], context: grpc.aio.ServicerContext) -> Any:
+            async def _apply_client_stream(request: AsyncIterator[Any], context: _ServicerContext) -> Any:
+                context = ContextWrapper(context)
                 async def call_next(req_stream: AsyncIterator[Any], ctx: grpc.aio.ServicerContext) -> Any:
                     return await handler(req_stream, ctx)
 

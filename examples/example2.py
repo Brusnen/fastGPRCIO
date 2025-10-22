@@ -40,7 +40,6 @@ app.add_middleware(TracingMiddleware(tracer_provider=provider))
 
 @app.register_as("unary_unary")
 async def unary_unary(data: RequestSchema, context: GRPCContext) -> ResponseSchema:
-    await asyncio.sleep(1)
     return ResponseSchema(response=f"Hello, {data.request}!")
 
 
