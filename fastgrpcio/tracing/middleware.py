@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 from typing import Any, AsyncIterator, Awaitable, Callable, Literal
-import grpc
 from google.protobuf.message import Message
-from opentelemetry import trace
-from opentelemetry.propagate import extract, inject
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.trace import INVALID_SPAN, Span
+try:
+    from opentelemetry import trace
+    from opentelemetry.propagate import extract, inject
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.trace import INVALID_SPAN, Span
+except ImportError:
+    raise ImportError(
+        "opentelemetry-sdk is required to use TracingMiddleware. "
+        "Please install it with 'pip install fastgrpcio[otel]'"
+    )
 
 from fastgrpcio.context import ContextWrapper
 from fastgrpcio.middlewares import BaseMiddleware
