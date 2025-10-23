@@ -21,6 +21,7 @@ class BaseMiddleware:
         response_class: type[BaseGRPCSchema],
         handler: Callable[..., Any],
         unary_type: Literal["Unary", "ServerStreaming", "ClientStreaming", "BidiStreaming"],
+        **kwargs
     ) -> Any:
         response = await call_next(request, context)
         return response
@@ -35,6 +36,7 @@ class BaseMiddleware:
         response_class: type[BaseGRPCSchema],
         handler: Callable[..., Any],
         unary_type: Literal["Unary", "ServerStreaming", "ClientStreaming", "BidiStreaming"],
+        **kwargs
     ) -> AsyncIterator[Message]:
         async for resp in call_next(request, context):
             yield resp
@@ -49,6 +51,7 @@ class BaseMiddleware:
         response_class: type[BaseGRPCSchema],
         handler: Callable[..., Any],
         unary_type: Literal["Unary", "ServerStreaming", "ClientStreaming", "BidiStreaming"],
+        **kwargs
     ) -> Any:
         async def wrapped_stream() -> AsyncIterator[Any]:
             async for msg in request:
@@ -69,6 +72,7 @@ class LoggingMiddleware(BaseMiddleware):
         response_class: type[BaseGRPCSchema],
         handler: Callable[..., Any],
         unary_type: Literal["Unary", "ServerStreaming", "ClientStreaming", "BidiStreaming"],
+        **kwargs
     ) -> Any:
         logger.info(f"[{unary_type}] - {user_func.__name__} - Received request")
         response = await call_next(request, context)
@@ -85,6 +89,7 @@ class LoggingMiddleware(BaseMiddleware):
         response_class: type[BaseGRPCSchema],
         handler: Callable[..., Any],
         unary_type: Literal["Unary", "ServerStreaming", "ClientStreaming", "BidiStreaming"],
+        **kwargs
     ) -> Any:
         logger.info(f"[{unary_type}] - {user_func.__name__} - Started streaming")
         async for resp in call_next(request, context):
@@ -102,6 +107,7 @@ class LoggingMiddleware(BaseMiddleware):
         response_class: type[BaseGRPCSchema],
         handler: Callable[..., Any],
         unary_type: Literal["Unary", "ServerStreaming", "ClientStreaming", "BidiStreaming"],
+        **kwargs
     ) -> Any:
         async def wrapped_stream() -> AsyncIterator[Any]:
             async for msg in request:

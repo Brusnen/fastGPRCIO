@@ -37,6 +37,8 @@ class GRPCCompiler(CreateHandlersMixins):
         middlewares: list[BaseMiddleware],
     ):
         self.file_proto = descriptor_pb2.FileDescriptorProto()
+        self.app_name = app_name
+        self.app_package_name = app_package_name
         self.file_proto.name = f"{app_package_name}.proto"
         self.service_name = app_name
         self.file_proto.package = app_package_name
@@ -166,17 +168,18 @@ class GRPCCompiler(CreateHandlersMixins):
         user_func: Callable[..., Any],
         request_model: type[BaseGRPCSchema],
         response_class: type[BaseGRPCSchema],
+        func_name: str,
         client_stream: bool = False,
         server_stream: bool = False,
     ) -> Callable[..., Any]:
         if not client_stream and not server_stream:
-            return self._make_unary_handler(user_func, request_model, response_class)
+            return self._make_unary_handler(user_func, request_model, response_class, func_name)
         if not client_stream and server_stream:
-            return self._make_server_stream_handler(user_func, request_model, response_class)
+            return self._make_server_stream_handler(user_func, request_model, response_class, func_name)
         if client_stream and not server_stream:
-            return self._make_client_stream_handler(user_func, request_model, response_class)
+            return self._make_client_stream_handler(user_func, request_model, response_class, func_name)
         if client_stream and server_stream:
-            return self._make_bidi_stream_handler(user_func, request_model, response_class)
+            return self._make_bidi_stream_handler(user_func, request_model, response_class, func_name)
 
         raise ValueError(f"Failed to determine RPC type for {user_func.__name__}")
 
@@ -199,7 +202,7 @@ class GRPCCompiler(CreateHandlersMixins):
             request_class = GetMessageClass(self.pool.FindMessageTypeByName(request_message))
             response_class = GetMessageClass(self.pool.FindMessageTypeByName(response_message))
 
-            handler = self._make_handler(func, request_model, response_class, client_stream, server_stream)
+            handler = self._make_handler(func, request_model, response_class, func_name, client_stream, server_stream)
 
             if client_stream and server_stream:
                 grpc_handler = grpc.stream_stream_rpc_method_handler(

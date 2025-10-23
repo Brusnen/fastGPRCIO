@@ -10,7 +10,7 @@ from grpc._cython.cygrpc import _ServicerContext
 from pydantic import ValidationError
 
 from fastgrpcio._utils import pydantic_error_to_grpc
-from fastgrpcio.context import GRPCContext
+from fastgrpcio.context import GRPCContext, ContextWrapper
 from fastgrpcio.middlewares import BaseMiddleware
 from fastgrpcio.schemas import BaseGRPCSchema
 
@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 class CreateHandlersMixins:
     _middlewares: list[BaseMiddleware]
+    app_name: str
+    app_package_name: str
 
     def _apply_middlewares(
         self,
@@ -28,10 +30,12 @@ class CreateHandlersMixins:
         request_model: type[BaseGRPCSchema],
         response_class: type[BaseGRPCSchema],
         unary_type: Literal["Unary", "ServerStreaming", "ClientStreaming", "BidiStreaming"],
+        func_name: str,
     ) -> Any:
         if unary_type in ("Unary"):
 
-            async def _apply_unary(request: Any, context: grpc.aio.ServicerContext) -> Any:
+            async def _apply_unary(request: Any, context: _ServicerContext) -> Any:
+                context = ContextWrapper(context)
                 async def call_next(req: Any, ctx: grpc.aio.ServicerContext) -> Any:
                     return await handler(req, ctx)
 
@@ -53,6 +57,9 @@ class CreateHandlersMixins:
                             response_class=response_class,
                             handler=handler,
                             unary_type=unary_type,
+                            app_name=self.app_name,
+                            app_package_name=self.app_package_name,
+                            func_name=func_name,
                         )
 
                     call_next = wrapper
@@ -63,8 +70,9 @@ class CreateHandlersMixins:
 
         elif unary_type in ("ServerStreaming", "BidiStreaming"):
 
-            async def _apply_server_stream(request: Any, context: grpc.aio.ServicerContext) -> AsyncIterator[Any]:
-                async def call_next(req: Any, ctx: grpc.aio.ServicerContext) -> AsyncIterator[Any]:
+            async def _apply_server_stream(request: Any, context: _ServicerContext) -> AsyncIterator[Any]:
+                context = ContextWrapper(context)
+                async def call_next(req: Any, ctx: _ServicerContext) -> AsyncIterator[Any]:
                     async for resp in handler(req, ctx):
                         yield resp
 
@@ -86,6 +94,9 @@ class CreateHandlersMixins:
                             response_class=response_class,
                             handler=handler,
                             unary_type=unary_type,
+                            app_name=self.app_name,
+                            app_package_name=self.app_package_name,
+                            func_name=func_name,
                         ):
                             yield resp
 
@@ -98,7 +109,8 @@ class CreateHandlersMixins:
 
         elif unary_type in ("ClientStreaming"):
 
-            async def _apply_client_stream(request: AsyncIterator[Any], context: grpc.aio.ServicerContext) -> Any:
+            async def _apply_client_stream(request: AsyncIterator[Any], context: _ServicerContext) -> Any:
+                context = ContextWrapper(context)
                 async def call_next(req_stream: AsyncIterator[Any], ctx: grpc.aio.ServicerContext) -> Any:
                     return await handler(req_stream, ctx)
 
@@ -120,6 +132,9 @@ class CreateHandlersMixins:
                             response_class=response_class,
                             handler=handler,
                             unary_type=unary_type,
+                            app_name=self.app_name,
+                            app_package_name=self.app_package_name,
+                            func_name=func_name,
                         )
 
                     call_next = wrapper
@@ -133,6 +148,7 @@ class CreateHandlersMixins:
         user_func: Callable[..., Any],
         request_model: type[BaseGRPCSchema],
         response_class: type[BaseGRPCSchema],
+        func_name: str,
     ) -> Callable[..., Any]:
         async def handler(request_proto: Message, context: _ServicerContext) -> Any:
             request_dict: dict[str, Any] = MessageToDict(request_proto)
@@ -157,7 +173,7 @@ class CreateHandlersMixins:
 
             return response_class(**result.model_dump())
 
-        handler = self._apply_middlewares(handler, user_func, request_model, response_class, unary_type="Unary")
+        handler = self._apply_middlewares(handler, user_func, request_model, response_class, unary_type="Unary", func_name=func_name)
         return handler
 
     def _make_server_stream_handler(
@@ -165,6 +181,7 @@ class CreateHandlersMixins:
         user_func: Callable[..., Any],
         request_model: type[BaseGRPCSchema],
         response_class: type[BaseGRPCSchema],
+        func_name: str,
     ) -> Callable[..., Any]:
         async def handler(request_proto: Message, context: _ServicerContext) -> AsyncIterator[Any]:
             request_dict: dict[str, Any] = MessageToDict(request_proto)
@@ -185,7 +202,7 @@ class CreateHandlersMixins:
                 yield response_class(**item.model_dump())
 
         handler = self._apply_middlewares(
-            handler, user_func, request_model, response_class, unary_type="ServerStreaming"
+            handler, user_func, request_model, response_class, unary_type="ServerStreaming", func_name=func_name
         )
         return handler
 
@@ -194,6 +211,7 @@ class CreateHandlersMixins:
         user_func: Callable[..., Any],
         request_model: type[BaseGRPCSchema],
         response_class: type[BaseGRPCSchema],
+        func_name: str,
     ) -> Callable[..., Any]:
         async def handler(request_iterator: AsyncIterator[Message], context: _ServicerContext) -> Any:
             async def pydantic_request_gen() -> AsyncIterator[Any]:
@@ -219,7 +237,7 @@ class CreateHandlersMixins:
             return response_class(**result.model_dump())
 
         handler = self._apply_middlewares(
-            handler, user_func, request_model, response_class, unary_type="ClientStreaming"
+            handler, user_func, request_model, response_class, unary_type="ClientStreaming", func_name=func_name
         )
         return handler
 
@@ -228,6 +246,7 @@ class CreateHandlersMixins:
         user_func: Callable[..., Any],
         request_model: type[BaseGRPCSchema],
         response_class: type[BaseGRPCSchema],
+        func_name: str,
     ) -> Callable[..., Any]:
         async def handler(request_iterator: AsyncIterator[Message], context: _ServicerContext) -> AsyncIterator[Any]:
             async def pydantic_request_gen() -> AsyncIterator[Any]:
@@ -250,5 +269,5 @@ class CreateHandlersMixins:
             async for resp in result:
                 yield response_class(**resp.model_dump())
 
-        handler = self._apply_middlewares(handler, user_func, request_model, response_class, unary_type="BidiStreaming")
+        handler = self._apply_middlewares(handler, user_func, request_model, response_class, unary_type="BidiStreaming", func_name=func_name)
         return handler
