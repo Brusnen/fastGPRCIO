@@ -1,0 +1,64 @@
+site_name: FastGRPC Documentation
+site_description: Lightweight framework for gRPC with a FastAPI-like developer experience
+site_url: https://example.com
+repo_url: https://github.com/your-org/fastGPRCIO
+edit_uri: ''
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.tabs
+    - navigation.indexes
+    - navigation.top
+    - content.code.copy
+    - toc.follow
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+
+plugins:
+  - search
+  - i18n:
+      default_language: en
+      languages:
+        en: English
+      docs_structure: folder
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - def_list
+  - footnotes
+  - meta
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: en/index.md
+  - Tutorial:
+      - en/tutorial/installation.md
+      - en/tutorial/first-steps.md
+      - en/tutorial/handlers-and-schemas.md
+      - en/tutorial/streaming.md
+  - User Guide:
+      - en/guide/dependencies.md
+      - en/guide/routers.md
+      - en/guide/middlewares.md
+      - en/guide/context.md
+      - en/guide/error-handling.md
+      - en/guide/reflection.md
+  - Observability:
+      - en/observability/tracing.md
+  - Client:
+      - en/client/python-client.md
+  - Deployment:
+      - en/deployment/deployment.md
+  - Examples:
+      - en/examples/examples.md
+  - Project:
+      - en/project/contributing.md
+      - en/project/release-notes.md
+

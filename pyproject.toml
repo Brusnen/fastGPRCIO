@@ -1,6 +1,6 @@
 [project]
 name = "fastgrpcio"
-version = "0.1.0"
+version = "0.1.1"
 authors = [{ name = "Sergey Brusnov", email = "sergey.brusnov1900@gmail.com" }]
 description = "Rapid fast development of gRPC services with Pydantic models"
 license = { text = "MIT" }
@@ -27,6 +27,11 @@ otel = [
     "opentelemetry-exporter-otlp-proto-grpc>=1.38.0",
     "opentelemetry-instrumentation-grpc>=0.59b0",
     "opentelemetry-sdk>=1.38.0",
+]
+
+docs = [
+    "mkdocs-i18n>=0.4.6",
+    "mkdocs-material>=9.6.22",
 ]
 
 [tool.ruff]
