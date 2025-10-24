@@ -1,71 +1,71 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
-         <loc>https://example.com/en/</loc>
+         <loc>https://fastgrpcio.brusnen.com/en/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://example.com/en/client/python-client/</loc>
+         <loc>https://fastgrpcio.brusnen.com/en/client/python-client/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://example.com/en/deployment/deployment/</loc>
+         <loc>https://fastgrpcio.brusnen.com/en/deployment/deployment/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://example.com/en/examples/examples/</loc>
+         <loc>https://fastgrpcio.brusnen.com/en/examples/examples/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://example.com/en/guide/context/</loc>
+         <loc>https://fastgrpcio.brusnen.com/en/guide/context/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://example.com/en/guide/dependencies/</loc>
+         <loc>https://fastgrpcio.brusnen.com/en/guide/dependencies/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://example.com/en/guide/error-handling/</loc>
+         <loc>https://fastgrpcio.brusnen.com/en/guide/error-handling/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://example.com/en/guide/middlewares/</loc>
+         <loc>https://fastgrpcio.brusnen.com/en/guide/middlewares/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://example.com/en/guide/reflection/</loc>
+         <loc>https://fastgrpcio.brusnen.com/en/guide/reflection/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://example.com/en/guide/routers/</loc>
+         <loc>https://fastgrpcio.brusnen.com/en/guide/routers/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://example.com/en/observability/tracing/</loc>
+         <loc>https://fastgrpcio.brusnen.com/en/observability/tracing/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://example.com/en/project/contributing/</loc>
+         <loc>https://fastgrpcio.brusnen.com/en/project/contributing/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://example.com/en/project/release-notes/</loc>
+         <loc>https://fastgrpcio.brusnen.com/en/project/release-notes/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://example.com/en/tutorial/first-steps/</loc>
+         <loc>https://fastgrpcio.brusnen.com/en/tutorial/first-steps/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://example.com/en/tutorial/handlers-and-schemas/</loc>
+         <loc>https://fastgrpcio.brusnen.com/en/tutorial/handlers-and-schemas/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://example.com/en/tutorial/installation/</loc>
+         <loc>https://fastgrpcio.brusnen.com/en/tutorial/installation/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://example.com/en/tutorial/streaming/</loc>
+         <loc>https://fastgrpcio.brusnen.com/en/tutorial/streaming/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
 </urlset>
