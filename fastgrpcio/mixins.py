@@ -150,13 +150,13 @@ class CreateHandlersMixins:
         response_class: type[BaseGRPCSchema],
         func_name: str,
     ) -> Callable[..., Any]:
-        async def handler(request_proto: Message, context: _ServicerContext) -> Any:
+        async def handler(request_proto: Message, context: ContextWrapper) -> Any:
             request_dict: dict[str, Any] = MessageToDict(request_proto)
             try:
                 pydantic_request = request_model.model_validate(request_dict)
             except ValidationError as e:
                 grpc_status_obj = pydantic_error_to_grpc(e)
-                await context.abort_with_status(grpc_status_obj)
+                await context._context.abort_with_status(grpc_status_obj)
                 return
 
             injected = fast_depends.inject(user_func)
@@ -183,13 +183,13 @@ class CreateHandlersMixins:
         response_class: type[BaseGRPCSchema],
         func_name: str,
     ) -> Callable[..., Any]:
-        async def handler(request_proto: Message, context: _ServicerContext) -> AsyncIterator[Any]:
+        async def handler(request_proto: Message, context: ContextWrapper) -> AsyncIterator[Any]:
             request_dict: dict[str, Any] = MessageToDict(request_proto)
             try:
                 pydantic_request = request_model.model_validate(request_dict)
             except ValidationError as e:
                 grpc_status_obj = pydantic_error_to_grpc(e)
-                await context.abort_with_status(grpc_status_obj)
+                await context._context.abort_with_status(grpc_status_obj)
                 return
 
             injected = fast_depends.inject(user_func)
@@ -213,7 +213,7 @@ class CreateHandlersMixins:
         response_class: type[BaseGRPCSchema],
         func_name: str,
     ) -> Callable[..., Any]:
-        async def handler(request_iterator: AsyncIterator[Message], context: _ServicerContext) -> Any:
+        async def handler(request_iterator: AsyncIterator[Message], context: ContextWrapper) -> Any:
             async def pydantic_request_gen() -> AsyncIterator[Any]:
                 async for msg in request_iterator:
                     msg_dict: dict[str, Any] = MessageToDict(msg)
@@ -221,7 +221,7 @@ class CreateHandlersMixins:
                         yield request_model.model_validate(msg_dict)
                     except ValidationError as e:
                         grpc_status_obj = pydantic_error_to_grpc(e)
-                        await context.abort_with_status(grpc_status_obj)
+                        await context._context.abort_with_status(grpc_status_obj)
                         return
 
             injected = fast_depends.inject(user_func)
@@ -248,7 +248,7 @@ class CreateHandlersMixins:
         response_class: type[BaseGRPCSchema],
         func_name: str,
     ) -> Callable[..., Any]:
-        async def handler(request_iterator: AsyncIterator[Message], context: _ServicerContext) -> AsyncIterator[Any]:
+        async def handler(request_iterator: AsyncIterator[Message], context: ContextWrapper) -> AsyncIterator[Any]:
             async def pydantic_request_gen() -> AsyncIterator[Any]:
                 async for msg in request_iterator:
                     msg_dict: dict[str, Any] = MessageToDict(msg)
@@ -256,7 +256,7 @@ class CreateHandlersMixins:
                         yield request_model.model_validate(msg_dict)
                     except ValidationError as e:
                         grpc_status_obj = pydantic_error_to_grpc(e)
-                        await context.abort_with_status(grpc_status_obj)
+                        await context._context.abort_with_status(grpc_status_obj)
                         return
 
             injected = fast_depends.inject(user_func)

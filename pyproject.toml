@@ -1,6 +1,6 @@
 [project]
 name = "fastgrpcio"
-version = "0.1.1"
+version = "0.1.2"
 authors = [{ name = "Sergey Brusnov", email = "sergey.brusnov1900@gmail.com" }]
 description = "Rapid fast development of gRPC services with Pydantic models"
 license = { text = "MIT" }
